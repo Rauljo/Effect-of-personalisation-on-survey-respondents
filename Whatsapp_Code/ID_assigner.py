@@ -1,7 +1,7 @@
 #Reads friends list and assigns a unique code to each contact in a new column called "code"
 import pandas as pd
 
-csvs = ["contacts_selin_clean.csv", "contacts_dani.csv", "friends.csv"]
+csvs = ["friends.csv", "friends2.csv", "friends3.csv"]
 
 #lengths:
 lengths = [len(pd.read_csv(csv)) for csv in csvs]
