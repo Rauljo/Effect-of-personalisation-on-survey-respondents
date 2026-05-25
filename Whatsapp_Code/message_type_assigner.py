@@ -4,7 +4,7 @@ import random
 import pandas as pd
 
 # Read the CSVs and assign Custom or Basic randomly. Each CSV has two groups: CloseFriends=Yes or No. I want each group to be balanced.
-csvs = ["selin_contacts_clean_code.csv", "contacts_dani_code.csv", "friends_code.csv"]
+csvs = ["friends_code.csv", "friends1_code.csv", "friends2_code.csv"]
 
 for csv in csvs:
     df = pd.read_csv(csv)
