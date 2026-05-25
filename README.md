@@ -29,4 +29,4 @@ rates and response times among friends.
 - Whattsapp bot: code to assign unique identifiers to contacts, assign types of messages randomly and send messages using a whattsapp bot
 - Report: on the results on the analysis and possible future work
 - Results: the dataset collected on the user inputs
-- Data analysis code: All the histograms, plots, etc. used for the analysis
+- Data analysis code: All the histograms, plots, etc. used for the analysis (both in .qmd and .pdf formats)
