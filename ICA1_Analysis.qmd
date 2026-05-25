@@ -1,0 +1,777 @@
+---
+title: "ICA1 Analysis"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse) # This loads dplyr and the %>% pipe
+library(MASS)
+library(pwr)
+```
+
+## DATA PREPROCESSING
+
+We load the complete dataset
+
+```{r}
+data_clean <- data.frame(read.table("Results_ICA1.csv", header=TRUE, sep=","))
+```
+
+### Transform columns into factors
+
+```{r}
+data_clean$CloseFriends <- relevel(as.factor(data_clean$CloseFriends), ref = "No")
+data_clean$MessageType <- relevel(as.factor(data_clean$MessageType), ref = "Basic")
+```
+
+## EXPLORATORY ANALYSIS
+
+### Boxplots
+
+```{r}
+ggplot(data_clean, aes(x = interaction(CloseFriends, MessageType), y = TimeRespond)) +
+  geom_boxplot() +
+  labs(title = "Original data boxplot", x = "CloseFriends : MessageType") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(data_clean, aes(x = interaction(CloseFriends, MessageType), y = log(TimeRespond))) +
+  geom_boxplot() +
+  labs(title = "Log data boxplot", x = "CloseFriends : MessageType") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### Dataframe per factor combination
+
+```{r}
+# dataframe for each factor combination
+datos_CP_clean <- data_clean %>%
+  filter(
+    CloseFriends == "Yes",
+    MessageType == "Personalized"
+  )
+datos_NP_clean <- data_clean %>%
+  filter(
+    CloseFriends == "No",
+    MessageType == "Personalized"
+  )
+datos_CB_clean <- data_clean %>%
+  filter(
+    CloseFriends == "Yes",
+    MessageType == "Basic"
+  )
+datos_NB_clean <- data_clean %>%
+  filter(
+    CloseFriends == "No",
+    MessageType == "Basic"
+  )
+```
+
+### Histograms
+
+```{r}
+# total histogram 
+ggplot(data_clean, aes(x = TimeRespond)) +
+  geom_histogram(fill = "steelblue", color = "white", bins = 20) +
+  ggtitle("Original histogram")
+
+ggplot(data_clean, aes(x = log(TimeRespond))) +
+  geom_histogram(fill = "steelblue", color = "white", bins = 20) +
+  ggtitle("Log histogram")
+```
+
+```{r}
+# histograms per factor combination
+ggplot(datos_CP_clean, aes(x = TimeRespond)) +
+  geom_histogram(fill = "steelblue", color = "white", bins = 15) +
+  ggtitle("Close Friends + Personalized histogram")
+ggplot(datos_CB_clean, aes(x = TimeRespond)) +
+  geom_histogram(fill = "steelblue", color = "white", bins = 15) +
+  ggtitle("Close Friends + Basic histogram")
+ggplot(datos_NP_clean, aes(x = TimeRespond)) +
+  geom_histogram(fill = "steelblue", color = "white", bins = 15) +
+  ggtitle("Non Close Friends + Personalized histogram")
+ggplot(datos_NB_clean, aes(x = TimeRespond)) +
+  geom_histogram(fill = "steelblue", color = "white", bins = 15) +
+  ggtitle("Non Close Friends + Basic histogram")
+
+```
+
+### Kernelized histograms
+
+```{r}
+# kernelized kistogram total
+ggplot(data_clean, aes(x = TimeRespond)) +
+  geom_density(alpha = 0.5) + # alpha makes the fill transparent so you can see overlaps
+  labs(
+    title = "Kernel Density of TimeRespond by Factor Combination",
+    x = "Response Time",
+    y = "Density",
+    fill = "Factor Combination"
+  ) +
+  theme_minimal() +
+  ggtitle("Total kernelized histogram")
+
+# kernelized kistogram log
+ggplot(data_clean, aes(x = log(TimeRespond))) +
+  geom_density(alpha = 0.5) + # alpha makes the fill transparent so you can see overlaps
+  labs(
+    title = "Kernel Density of log(TimeRespond) by Factor Combination",
+    x = "log(TimeRespond)",
+    y = "Density",
+    fill = "Factor Combination"
+  ) +
+  theme_minimal() +
+  ggtitle("Log kernelized histogram")
+
+
+```
+
+```{r}
+# combined kernelized histogram
+ggplot(data_clean, aes(x = TimeRespond, fill = interaction(CloseFriends, MessageType))) +
+  geom_density(alpha = 0.5) + # alpha makes the fill transparent so you can see overlaps
+  labs(
+    title = "Kernel Density of Response Time by Factor Combination",
+    x = "Reponse Time",
+    y = "Density",
+    fill = "Factor Combination"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(data_clean, aes(x = log(TimeRespond), fill = interaction(CloseFriends, MessageType))) +
+  geom_density(alpha = 0.5) + # alpha makes the fill transparent so you can see overlaps
+  labs(
+    title = "Kernel Density of log(Response Time) by Factor Combination",
+    x = "log(Response Time)",
+    y = "Density",
+    fill = "Factor Combination"
+  ) +
+  theme_minimal()
+```
+
+### Count number of observations per factor combination
+
+```{r}
+data_clean %>%
+  count(CloseFriends, MessageType)
+```
+
+### Delete N/A
+
+```{r}
+datos_compressed_na <- data_clean %>% 
+  drop_na(TimeRespond)
+```
+
+```{r}
+datos_compressed_na %>%
+  count(CloseFriends, MessageType)
+```
+
+### Interaction plot
+
+Original data
+
+```{r}
+summary_df <- datos_compressed_na %>%
+  group_by(CloseFriends, MessageType) %>%
+  summarise(
+    mean_response = mean(TimeRespond),
+    se = sd(TimeRespond) / sqrt(n()),
+    .groups = 'drop'
+  )
+```
+
+```{r}
+ggplot(summary_df, aes(x = CloseFriends, y = mean_response, color = MessageType, group = MessageType)) +
+  geom_line(linewidth = 1) + 
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_response - se, ymax = mean_response + se), width = 0.1) +
+  labs(title = "Interaction Plot",
+       x = "CloseFriends",
+       y = "Mean(Response Time)") +
+  theme_bw()
+```
+
+Data after logarithmic transform
+
+```{r}
+summary_df_log <- datos_compressed_na %>%
+  group_by(CloseFriends, MessageType) %>%
+  summarise(
+    mean_response_log = mean(log(TimeRespond)),
+    se = sd(log(TimeRespond)) / sqrt(n()),
+    .groups = 'drop'
+  )
+```
+
+```{r}
+ggplot(summary_df_log, aes(x = CloseFriends, y = mean_response_log, color = MessageType, group = MessageType)) +
+  geom_line(linewidth = 1) + 
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_response_log - se, ymax = mean_response_log + se), width = 0.1) +
+  labs(title = "Interaction Plot",
+       x = "CloseFriends",
+       y = "Mean Log(TimeRespond)") +
+  theme_bw()
+```
+
+## OUTLIER ELIMINATION
+
+We delete all observations where TimeRespond \> 2000 (can be seen as anomalies looking at the histogram - people who didn't answer in the first two days.
+
+```{r}
+# this also deleted N/A
+datos_compressed_outliers <- data_clean %>%
+  filter(
+    TimeRespond < 2000
+  )
+```
+
+```{r}
+ggplot(datos_compressed_outliers, aes(x = interaction(CloseFriends, MessageType), y = TimeRespond)) +
+  geom_boxplot() +
+  labs(title = "Data without outliers boxplot", x = "CloseFriends : MessageType") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(datos_compressed_outliers, aes(x = interaction(CloseFriends, MessageType), y = log(TimeRespond))) +
+  geom_boxplot() +
+  labs(title = "Log data without outliers boxplot", x = "CloseFriends : MessageType") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+### Count number of observations per factor combination
+
+```{r}
+# Simple count
+datos_compressed_outliers %>%
+  count(CloseFriends, MessageType)
+```
+
+### Kernelized histograms
+
+```{r}
+# kernelized kistogram total
+ggplot(datos_compressed_outliers, aes(x = TimeRespond)) +
+  geom_density(alpha = 0.5) + # alpha makes the fill transparent so you can see overlaps
+  labs(
+    title = "Kernel Density of TimeRespond by Factor Combination",
+    x = "TimeRespond",
+    y = "Density",
+    fill = "Factor Combination"
+  ) +
+  theme_minimal() +
+  ggtitle("No outliers kernelized histogram")
+
+# kernelized kistogram log
+ggplot(datos_compressed_outliers, aes(x = log(TimeRespond))) +
+  geom_density(alpha = 0.5) + # alpha makes the fill transparent so you can see overlaps
+  labs(
+    title = "Kernel Density of log(TimeRespond) by Factor Combination",
+    x = "TimeRespond",
+    y = "Density",
+    fill = "Factor Combination"
+  ) +
+  theme_minimal() +
+  ggtitle("Log no outliers kernelized histogram")
+
+```
+
+```{r}
+# combined kernelized histogram
+ggplot(datos_compressed_outliers, aes(x = TimeRespond, fill = interaction(CloseFriends, MessageType))) +
+  geom_density(alpha = 0.5) + # alpha makes the fill transparent so you can see overlaps
+  labs(
+    title = "Kernel Density of TimeRespond by Factor Combination",
+    x = "TimeRespond",
+    y = "Density",
+    fill = "Factor Combination"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(datos_compressed_outliers, aes(x = log(TimeRespond), fill = interaction(CloseFriends, MessageType))) +
+  geom_density(alpha = 0.5) + # alpha makes the fill transparent so you can see overlaps
+  labs(
+    title = "Kernel Density of log(TimeRespond) by Factor Combination",
+    x = "log(TimeRespond)",
+    y = "Density",
+    fill = "Factor Combination"
+  ) +
+  theme_minimal()
+```
+
+### Histograms
+
+```{r}
+# total histogram 
+ggplot(datos_compressed_outliers, aes(x = TimeRespond)) +
+  geom_histogram(fill = "steelblue", color = "white", bins = 20) +
+  ggtitle("No outliers histogram")
+
+ggplot(datos_compressed_outliers, aes(x = log(TimeRespond))) +
+  geom_histogram(fill = "steelblue", color = "white", bins = 20) +
+  ggtitle("Log no outliers histogram")
+```
+
+## SAMPLE SIZE
+
+```{r}
+# Calculate power for a single effect (Main Effect or Interaction)
+analysis <- pwr.f2.test(u = 1, f2 = 0.0625, sig.level = 0.05, power = 0.80)
+print(analysis)
+
+# Calculate total N needed for the whole 2x2 design
+# N = v + u + 1
+total_n <- ceiling(analysis$v + analysis$u + 1)
+cat("Required Total Sample Size:", total_n)
+```
+
+## PERCENTAGE OF ANSWERS PER FACTOR COMBINATION
+
+### Chi-SQ test for CloseFriends
+
+Does being a close friend have any effect on the probability of answering?
+
+```{r}
+table_CloseFriends <- table(data_clean$CloseFriends, !is.na(data_clean$TimeRespond))
+table_CloseFriends
+```
+
+We can see that a higher percentage of the close friends answered. Is this difference significant?
+
+```{r}
+chisq.test(table_CloseFriends)
+```
+
+Not significant.
+
+### Chi-SQ test for MessageType
+
+```{r}
+table_MessageType <- table(data_clean$MessageType, !is.na(data_clean$TimeRespond))
+table_MessageType
+```
+
+We can also see that a higher percentage of the personalized messages answered. Is this difference significant?
+
+```{r}
+chisq.test(table_MessageType)
+```
+
+Also not significant.
+
+### Logistic Regression
+
+```{r}
+logit <- glm(!is.na(data_clean$TimeRespond) ~ CloseFriends * MessageType, 
+                   data = data_clean, 
+                   family = binomial(link = "logit"))
+summary(logit)
+```
+
+```{r}
+# Combined Odds Ratios and 95% Wald CIs
+exp(cbind(OR = coef(logit), confint.default(logit)))
+```
+
+## 2\^2 FACTORIAL EXPERIMENT
+
+### Original dataset
+
+```{r}
+options(contrasts=c("contr.sum","contr.sum"))
+fit_anova_clean <- aov(TimeRespond ~ CloseFriends * MessageType, data=datos_compressed_na)
+summary(fit_anova_clean)
+```
+
+```{r}
+plot(fit_anova_clean)
+```
+
+Residuals seem independent, but they are nowhere near being normal. This was expected due to the nature of time data. We need to apply some transformation to make the data normal.
+
+#### Logarithmic transform
+
+```{r}
+options(contrasts=c("contr.sum","contr.sum"))
+fit_anova_clean_log <- aov(log(TimeRespond) ~ CloseFriends * MessageType, data=datos_compressed_na)
+summary(fit_anova_clean_log)
+```
+
+```{r}
+plot(fit_anova_clean_log)
+```
+
+Some improvement, but still not normal. We perform Shapiro-Wilk test to confirm it.
+
+```{r}
+shapiro.test(fit_anova_clean_log$residuals)
+```
+
+We verify that the data is not normal.
+
+#### Box-Cox transform
+
+Find the optimal lambda for the boxcox transform. If lambda=0, we apply a logarithmic transform; else y' = (y\^lambda-1)/lambda.
+
+```{r}
+bc <- boxcox(TimeRespond ~ CloseFriends * MessageType, data=datos_compressed_na)
+lambda <- bc$x[which.max(bc$y)]
+```
+
+Ideal lambda is almost zero, so the ideal transformation should be a logarithm (which we've already tried and proven it did not bring normality). We will try the power transformation with the value of lambda given as well.
+
+```{r}
+fit_anova_clean_boxcox <- aov((TimeRespond^lambda-1)/lambda ~ CloseFriends * MessageType, data=datos_compressed_na)
+summary(fit_anova_clean_boxcox)
+```
+
+We check normality assumptions:
+
+```{r}
+plot(fit_anova_clean_boxcox)
+```
+
+```{r}
+shapiro.test(fit_anova_clean_boxcox$residuals)
+```
+
+Data is still not normal.
+
+### Dataset without outliers
+
+We'll repeat the analysis with the dataset without outliers.
+
+```{r}
+options(contrasts=c("contr.sum","contr.sum"))
+fit_anova_outliers <- aov(TimeRespond ~ CloseFriends * MessageType, data=datos_compressed_outliers)
+summary(fit_anova_outliers)
+```
+
+```{r}
+plot(fit_anova_outliers)
+```
+
+Obviously, the original data is still not normal. Let's apply the same transforms as before.
+
+#### Logarithmic transformation
+
+```{r}
+options(contrasts=c("contr.sum","contr.sum"))
+fit_anova_outliers_log <- aov(log(TimeRespond) ~ CloseFriends * MessageType, data=datos_compressed_outliers)
+summary(fit_anova_outliers_log)
+```
+
+```{r}
+plot(fit_anova_outliers_log)
+```
+
+```{r}
+shapiro.test(fit_anova_outliers_log$residuals)
+```
+
+Data is still not normal.
+
+#### Box-Cox transformation
+
+```{r}
+bc <- boxcox(TimeRespond ~ CloseFriends * MessageType, data=datos_compressed_outliers)
+lambda <- bc$x[which.max(bc$y)]
+```
+
+Same as before, lambda is almost 0, so the ideal transformation is logarithmic.
+
+Cannot find a way to transform the data into normality.
+
+This makes sense, due to the nature of the data - it has two peaks. What if the study the people who answered in the first and in the second days separately?
+
+## DIVIDE INTO FIRST AND SECOND DAY
+
+Now we study the people who answered the first day or not. We establish the border between first and second day at 500 minutes (which corresponds to 6am of the following day).
+
+### Preprocessing for first day data
+
+```{r}
+datos_compressed_first_day <- data_clean %>%
+  filter(
+    TimeRespond < 500
+  )
+```
+
+```{r}
+datos_compressed_first_day %>%
+  count(CloseFriends, MessageType)
+```
+
+```{r}
+ggplot(datos_compressed_first_day, aes(x = interaction(CloseFriends, MessageType), y = TimeRespond)) +
+  geom_boxplot() +
+  labs(title = "Log first day data boxplot", x = "CloseFriends : MessageType") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+```{r}
+ggplot(datos_compressed_first_day, aes(x = interaction(CloseFriends, MessageType), y = log(TimeRespond))) +
+  geom_boxplot() +
+  labs(title = "Log first day data boxplot", x = "CloseFriends : MessageType") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+data_clean$FirstDay <- data_clean$TimeRespond < 500
+data_clean$FirstDay[is.na(data_clean$FirstDay)] <- 0
+```
+
+#### Histograms
+
+```{r}
+ggplot(datos_compressed_first_day, aes(x = TimeRespond, fill = interaction(CloseFriends, MessageType))) +
+  geom_density(alpha = 0.5) + # alpha makes the fill transparent so you can see overlaps
+  labs(
+    title = "Kernel Density of Response Time by Group",
+    x = "Response Time",
+    y = "Density",
+    fill = "Group Condition"
+  ) +
+  theme_minimal()
+```
+
+Logarithmic histograms:
+
+```{r}
+ggplot(datos_compressed_first_day, aes(x = log(TimeRespond), fill = interaction(CloseFriends, MessageType))) +
+  geom_density(alpha = 0.5) + # alpha makes the fill transparent so you can see overlaps
+  labs(
+    title = "Kernel Density of TimeRespond by Factor Combination",
+    x = "TimeRespond",
+    y = "Density",
+    fill = "Factor Combination"
+  ) +
+  theme_minimal()
+```
+
+### First-day Response Rate
+
+#### Chi-SQ For CloseFriends
+
+```{r}
+condition <- data_clean$TimeRespond < 500 & 
+             !is.na(data_clean$TimeRespond)
+table_CloseFriends_FD <- table(data_clean$CloseFriends, condition)
+table_CloseFriends_FD
+```
+
+```{r}
+chisq.test(table_CloseFriends_FD)
+
+```
+
+Significant difference.
+
+#### Chi-SQ For MessageType
+
+```{r}
+table_MessageType_FD <- table(data_clean$MessageType, condition)
+table_MessageType_FD
+```
+
+```{r}
+chisq.test(table_MessageType_FD)
+```
+
+Not significant.
+
+#### Logistic regression
+
+We further analyze the first day response date using logistic regression.
+
+```{r}
+logit_FD <- glm(FirstDay ~ CloseFriends * MessageType, 
+                   data = data_clean, 
+                   family = binomial(link = "logit"))
+summary(logit_FD)
+```
+```{r}
+# Combined Odds Ratios and 95% Wald CIs
+exp(cbind(OR = coef(logit_FD), confint.default(logit_FD)))
+```
+
+
+### ANOVA for first day data
+
+#### Data without transformations
+
+```{r}
+options(contrasts=c("contr.sum","contr.sum"))
+fit_anova_first_day <- aov(TimeRespond ~ CloseFriends * MessageType, data=datos_compressed_first_day)
+summary(fit_anova_first_day)
+```
+
+```{r}
+plot(fit_anova_first_day)
+```
+
+Still not normal.
+
+#### Logarithmic transform
+
+```{r}
+options(contrasts=c("contr.sum","contr.sum"))
+fit_anova_first_day_log <- aov(log(TimeRespond) ~ CloseFriends * MessageType, data=datos_compressed_first_day)
+summary(fit_anova_first_day_log)
+```
+
+```{r}
+plot(fit_anova_first_day_log)
+```
+
+```{r}
+shapiro.test(fit_anova_first_day_log$residuals)
+```
+
+Still not normal.
+
+#### BoxCox transform
+
+```{r}
+bc <- boxcox(TimeRespond ~ CloseFriends * MessageType, data=datos_compressed_first_day)
+lambda <- bc$x[which.max(bc$y)]
+```
+
+Amost zero, but will try just in case:
+
+```{r}
+fit_anova_first_day_boxcox <- aov((TimeRespond^lambda-1)/lambda ~ CloseFriends * MessageType, data=datos_compressed_first_day)
+summary(fit_anova_first_day_boxcox)
+```
+
+```{r}
+plot(fit_anova_first_day_boxcox)
+```
+
+```{r}
+shapiro.test(fit_anova_first_day_boxcox$residuals)
+```
+
+Not normal.
+
+## OTHER POSSIBLE TESTS
+
+### GLMs
+
+GLMs don't assume normality! Just assume independent errors (homocedasticity).
+
+#### Gamma GLM
+
+```{r}
+fit_gamma_glm <- glm(TimeRespond ~ CloseFriends * MessageType,  family=Gamma(link="log"), data=datos_compressed_na)
+summary(fit_gamma_glm)
+```
+
+```{r}
+plot(fit_gamma_glm)
+```
+
+```{r}
+# Calculate D-squared (Deviance R-squared)
+D_squared <- 1 - (fit_gamma_glm$deviance / fit_gamma_glm$null.deviance)
+
+# Convert to percentage for easier reading
+D_squared_percent <- D_squared * 100
+
+# Print the result
+cat("Deviance R-squared:", round(D_squared, 5), "\n")
+cat("Percentage Explained:", round(D_squared_percent, 2), "%\n")
+```
+
+#### Gamma GLM without outliers
+
+```{r}
+fit_gamma_glm_outliers <- glm(TimeRespond ~ CloseFriends * MessageType, family=Gamma(link="log"), data=datos_compressed_outliers)
+summary(fit_gamma_glm_outliers)
+```
+
+```{r}
+plot(fit_gamma_glm_outliers)
+```
+
+```{r}
+# Calculate D-squared (Deviance R-squared)
+D_squared <- 1 - (fit_gamma_glm_outliers$deviance / fit_gamma_glm_outliers$null.deviance)
+
+# Convert to percentage for easier reading
+D_squared_percent <- D_squared * 100
+
+# Print the result
+cat("Deviance R-squared:", round(D_squared, 5), "\n")
+cat("Percentage Explained:", round(D_squared_percent, 2), "%\n")
+```
+
+#### Gamma GLM for first day
+
+```{r}
+fit_gamma_glm_FD <- glm(TimeRespond ~ CloseFriends * MessageType, family=Gamma, data=datos_compressed_first_day)
+summary(fit_gamma_glm_FD)
+```
+
+```{r}
+# Calculate D-squared (Deviance R-squared)
+D_squared <- 1 - (fit_gamma_glm_FD$deviance / fit_gamma_glm_FD$null.deviance)
+
+# Convert to percentage for easier reading
+D_squared_percent <- D_squared * 100
+
+# Print the result
+cat("Deviance R-squared:", round(D_squared, 5), "\n")
+cat("Percentage Explained:", round(D_squared_percent, 2), "%\n")
+```
+
+#### Quasi Poisson GLM
+
+```{r}
+fit_qpoisson_glm <- glm(TimeRespond ~ CloseFriends * MessageType, family=quasipoisson(link="log"), data=data_clean)
+summary(fit_qpoisson_glm)
+```
+
+```{r}
+plot(fit_qpoisson_glm)
+
+```
+
+```{r}
+# Calculate D-squared (Deviance R-squared)
+D_squared <- 1 - (fit_qpoisson_glm$deviance / fit_qpoisson_glm$null.deviance)
+
+# Convert to percentage for easier reading
+D_squared_percent <- D_squared * 100
+
+# Print the result
+cat("Deviance R-squared:", round(D_squared, 5), "\n")
+cat("Percentage Explained:", round(D_squared_percent, 2), "%\n")
+```
+
+## SAMPLE SIZE ANALYSIS
+
+```{r}
+observed_f2 <- (440.25 - 437.48) / 437.48 
+
+# Calculate required sample size for 80% power at alpha 0.05
+# u = 1 (degrees of freedom for one effect)
+power_analysis <- pwr.f2.test(u = 1, f2 = observed_f2, sig.level = 0.05, power = 0.80)
+
+# Total N needed
+required_N <- ceiling(power_analysis$v + power_analysis$u + 1)
+print(required_N)
+```
+
+```{r}
+observed_f2
+```
